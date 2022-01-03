@@ -2,7 +2,7 @@ function  Wgra(x,Y, display)
 
 if display == 1
     i=16;
-    j=16*1000;
+    j=16*100;
     t=linspace(0,16,j);
     k=j/i;
 
@@ -20,5 +20,5 @@ if display == 1
     subplot(212);
     plot(fshift,abs(yshift));
     title('∂‘≥∆∆µ”ÚÕº');
-    axis([-15,15,-500,3000]);
+    axis([-15,15,-500,500]);
 end

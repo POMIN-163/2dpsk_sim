@@ -1,0 +1,3 @@
+1.AudioDataFile.mat文件：音频数据文件，每1/16000s一个样值，每个样值为16bit，最高位是符号位。
+2.read_AudioDataFile.m文件：程序模板文件
+（根据自己设计系统进行文件名修改）

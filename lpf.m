@@ -1,8 +1,8 @@
-%µÍÍ¨ÂË²¨Æ÷
+%ä½Žé€šæ»¤æ³¢å™¨
 function [t,st]=lpf(f,sf,B)
 df = f(2)-f(1);
 T = 1/df;
-hf = zeros(1,length(f));%È«Áã¾ØÕó
+hf = zeros(1,length(f));%å…¨é›¶çŸ©é˜µ
 bf = [-floor( B/df ): floor( B/df )] + floor( length(f)/2 );
 hf(bf)=1;
 yf=hf.*sf;

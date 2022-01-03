@@ -5,12 +5,11 @@
 
 clear all  % 将所有工作空间内的变量、窗口清掉
 close all
-
-
+tic
 %{ ---- ---- ---- 参数列表 ---- ---- ---- %}
 
 unit_len = 16;           % 信息长度
-fs = 16000;              % 采样率
+fs = 1600;               % 采样率
 N = fs / unit_len;       % 单个码元区间内的采样点数
 t = linspace(0, 16, fs); % 将区间 [0,16] 分成 16000 份采样点
 
@@ -18,8 +17,8 @@ t = linspace(0, 16, fs); % 将区间 [0,16] 分成 16000 份采样点
 
 load 'AudioDataFile.mat' % 将音频数据Aud_data变量载入工作空间，得到的数据进行调制和传输
 
-data_len = 16001 % 音频文件长度
-% 160001
+data_len = 160001 % 音频文件长度
+
 %{ ---- ---- ---- 数字调制 ---- ---- ---- %}
 
 fc = 2 * pi * 5;           % 载波频率 = 5HZ
@@ -138,7 +137,7 @@ for times = 1 : data_len
     %{ ---- ---- ---- 信道传输 ---- ---- ---- %}
 
     % 高斯信道加噪：添加信噪比为 noise_n dB的加权高斯白噪声
-    W4 = awgn(W3, 1 / times);
+    W4 = awgn(W3, noise_n);
     Wgra(W4, 5, times);
 
     %{ ---- ---- ---- 数字解调 ---- ---- ---- %}
@@ -153,12 +152,24 @@ for times = 1 : data_len
     % Hd = dtlbq;
     % lp = filter(Hd, W5);
     % W6 = lp;
-    [f,af] = T2F(t,W5);
-    [t,W6] = lpf(f,af,4);
-    Wgra(W6, 1, times);
+    % [f,af] = T2F(t,W5);
+    % [t,W6] = lpf(f,af,4);
 
+    fp = 50;
+    fs = 120;
+    rp = 3;
+    rs = 20;
+    fn = 11025;
+    ws = fs / (fn / 2);
+    wp = fp / (fn / 2);            % 计算归一化角频率
+    [n,wn] = buttord(wp,ws,rp,rs); % 计算阶数和截止频率
+    [b,a] = butter(n, wn);         % 计算H(z)
+    W6 = filter(b, a, W5);
+    Wgra(W6, 1, times);
     % 抽样判决:低通滤波器有延迟，且低通滤波后的波形不平整。
     % 由于每个码元区间的中点信号最稳定，于是选择每个码元区间的中点作为抽样点，根据正负值进行判决。
+
+    fs = 1600;
     samp = zeros(1, unit_len);
     W7 = zeros(1, fs);
 
@@ -258,16 +269,26 @@ for times = 1 : data_len
         axis([0, unit_len, -1, 2]);
         title('相对码转绝对码');
     end
+    % 信号频域分析
+    if times < 100
+        figure(8);
+        hold on;
+        L = 100; %信号长度
+        N = 2^nextpow2(L); %取最接近1000的2的幂次,实现快速运算
+        sf = fft(W3, N) / 100; %由于时域抽样会有一个 1/Ts的衰减，所以必须乘以Ts也即除以fs
+        df = 100 / N; %频率分辨率
+        f = [0:df:df * (N - 1)] - 100 / 2; %使频域轴对称
+        N = 100;
+        plot(f, fftshift(abs(sf))); grid on; %把数据‘循环倒转’
+        axis([-50 50 0 1]);
+        title('信号功率谱');
+    end
 
     x1 = zeros(1, 16);
     for m1 = 0 : 16 - 1 % 提取样点值恢复原序列
-        data_rec(times, m1 + 1) = W8(1, 1000 * m1 + 500);
+        data_rec(times, m1 + 1) = W8(1, 100 * m1 + 50);
     end
 
-    if times <= 1000
-        dpsk_sig = fftshift(abs(fft(W3)).^2/(16)); % 抽取1000行计算双边功率谱密度
-        dpsk_sig_test(times, :) = dpsk_sig;        % 保存每次双边功率谱密度
-    end
     % 显示计算进度
     if rem(times, 100) == 0
         disp('已完成: ' + string(times) + ' 总数: ' + string(data_len));
@@ -292,7 +313,7 @@ plot(t, xx_r); % 画出音频信号波形
 sound(xx_r, Fs); % 将样值送到声卡播放，采样率为Fs
 
 N = 16;     % 产生信码长度
-Ns = 1000;  % 一个码元内的信号点数
+Ns = 100;   % 一个码元内的信号点数
 Ts = 1;     % 码元时间为1s
 t = 0:Ts / Ns:(Ts*N-Ts / Ns); % 产生横坐标时间向量
 A = 1;                        % 信号幅度为1
@@ -300,33 +321,26 @@ A = 1;                        % 信号幅度为1
 % 后面自己编写代码：
 % 完成系统有效性（画出传输信号功率谱密度，分析带宽）分析
 
-dpsk_sig_1 = mean(dpsk_sig_test);
-f1 = -Ns / Ts / 2:1 / (Ts*N):Ns / Ts / 2-1 / (Ts*N);
-figure;
-semilogy(f1, dpsk_sig_1);
-axis([-30, 30, 10^(-6), 10^6])
-title('功率谱密度');
-pause(5);
+pause(10);
+% close all;
 % 完成系统可靠性（计算误码率）分析
-clear all;
 
 unit_len = 16;           % 信息长度
-fs = 16000;              % 采样率
+fs = 16000*1.778;            % 采样率
 N = fs / unit_len;       % 单个码元区间内的采样点数
-t = linspace(0, 16, fs); % 将区间 [0,16] 分成 16000 份采样点
-SNR_db = 0:1:15;
+t = linspace(0, 16, fs); % 将区间 [0,16] 分成 1600 份采样点
+
 %{ ---- ---- ---- 读入音频 ---- ---- ---- %}
 
 load 'AudioDataFile.mat' % 将音频数据Aud_data变量载入工作空间，得到的数据进行调制和传输
 
-data_len = 160001          % 音频文件长度
 fc = 2 * pi * 5;           % 载波频率 = 5HZ
 wave_0 = sin(t * fc);      % 载波
 wave_1 = sin(t * fc + pi); % 移相后载波
 noise_n = 1;               % 高斯信道信噪比
 data_rec = zeros(data_len, unit_len); % 解调接收
 
-SNR_db = 0:1:15;
+SNR_db = -10:0.5:6;
 for i_SNR = 1:length(SNR_db)
     Nerr = 0;
     for times = 1:1000
@@ -387,30 +401,37 @@ for i_SNR = 1:length(SNR_db)
             end
         end
 
-        Wgra(W3, 2, 0);
-
         %{ ---- ---- ---- 信道传输 ---- ---- ---- %}
 
         % 高斯信道加噪：添加信噪比为 noise_n dB的加权高斯白噪声
         W4 = awgn(W3, SNR_db(i_SNR), 'measured');
-        Wgra(W4, 5, 0);
 
         %{ ---- ---- ---- 数字解调 ---- ---- ---- %}
 
         % 相干解调：2dpsk信号与本地载波相乘
         W5 = W4 .* wave_1;
 
-        Wgra(W5, 5, 0);
-
         % (弃用，效率低) 低通滤波器：根据上一步的频域图分析得，应采用截止频率为4的低通滤波器。
         % (弃用，效率低) 低通滤波器的设计利用fdatool工具实现，导出源码见dtlbq.m文件。
         % Hd = dtlbq;
         % lp = filter(Hd, W5);
         % W6 = lp;
-        [f,af] = T2F(t,W5);
-        [t,W6] = lpf(f,af,4);
-
-        Wgra(W6, 1, 0);
+        % [f,af] = T2F(t,W5);
+        % [t,W6] = lpf(f,af,4);
+        % fp = 500;
+        % fs = 700;
+        % rp = 4;
+        % rs = 20;
+        % fn = 11025;
+        % ws = fs / (fn / 2);
+        % wp = fp / (fn / 2);            % 计算归一化角频率
+        % [n,wn] = buttord(wp,ws,rp,rs); % 计算阶数和截止频率
+        % [b,a] = butter(n,wn);          % 计算H(z)
+        % W6 = filter(b,a,W5);
+        wp = 5 / 100; ws = 20 / 100;
+        [n2, wn] = buttord(wp, ws, 1, 50); %阻带衰减大于50dB，通带波纹小于1dB
+        [b, a] = butter(n2, wn);
+        W6 = filter(b, a, W5);
 
         % 抽样判决:低通滤波器有延迟，且低通滤波后的波形不平整。
         % 由于每个码元区间的中点信号最稳定，于是选择每个码元区间的中点作为抽样点，根据正负值进行判决。
@@ -483,20 +504,20 @@ for i_SNR = 1:length(SNR_db)
             end
         end
 
-        for m1 = 0 : 16 - 1 % 提取样点值恢复原序列
-            data_rec(times, m1 + 1) = W8(1, 1000 * m1 + 500);
+        for m1 = 1 : 16 % 提取样点值恢复原序列
+            data_rec(times, m1) = compare_rec(m1);
         end
 
         Nerr0 = sum(abs(Aud_data(times, :) - data_rec(times, :))); % 累计误码
-        if Nerr0 > 0
-            disp('ERR');
-        end
+        % if Nerr0 > 0
+        %     disp('ERR');
+        % end
         Nerr = Nerr + Nerr0;
     end
-    Pe(1, i_SNR) = Nerr / (16000);
-    disp('误码率计算已完成: ' + string(i_SNR) + ' / 16');
-end
+    Pe(1, i_SNR) = Nerr / (16 * 1000); % 抽取码元数
 
+    disp('误码率计算已完成: ' + string(i_SNR) + ' / 33');
+end
 figure;
 semilogy(SNR_db, Pe, 'b'); % 画出误码率曲线，第三个参数为颜色选择
 hold on                    % 保持窗口
@@ -510,22 +531,4 @@ grid on
 xlabel('SNR (dB)'); % 横坐标标注
 ylabel('Pe');       % 纵坐标标注
 title('误码率曲线'); % 设置标题
-
-
-
-xx = data_rec; % 假设直接接收到的就是发送端发送的无误码数据，课设设计时应是传输到接收端恢复出的数据。
-
-for ii = 1:size(xx, 1) % 将16位二进制码（一行16个比特构成的向量，最高位为符号位），转换为十进制的采样值
-    xx_r(ii, 1) = sum(xx(ii, 2:16) .* (2.^(14:-1:0)));
-
-    if xx(ii, 1) == 1
-        xx_r(ii, 1) = -xx_r(ii, 1); % 得到样值序列，存入xx_r变量，如果最高位为1，则样值为负。
-    end
-
-end
-
-Fs = 16000; % 采样速率为16000，采样率由音频文件决定
-t = (0:1:length(xx_r) - 1) * (1 / Fs); % 采样时刻向量
-figure;
-plot(t, xx_r); % 画出音频信号波形
-sound(xx_r, Fs); % 将样值送到声卡播放，采样率为Fs
+toc
